@@ -9,9 +9,12 @@ async function bootstrap(): Promise<void> {
 
   app.setGlobalPrefix('api');
   app.enableCors({
+    // Trailing slashes are stripped because a browser's `Origin` header never
+    // carries one: pasting "https://app.example.com/" into CORS_ORIGIN would
+    // otherwise match nothing and fail as an opaque CORS error in the client.
     origin: (process.env.CORS_ORIGIN ?? 'http://localhost:5173')
       .split(',')
-      .map((origin) => origin.trim())
+      .map((origin) => origin.trim().replace(/\/+$/, ''))
       .filter(Boolean),
     credentials: true,
   });
