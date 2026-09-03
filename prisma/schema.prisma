@@ -39,7 +39,14 @@ model Tour {
   tourists   Tourist[]   @relation("TourTourists")
   excursions Excursion[] @relation("TourExcursions")
 
+  /// The account that runs this tour. Leaders see only their own tours;
+  /// admins see every tour. Excursions and tourists stay shared, because an
+  /// excursion can be booked by tours belonging to different leaders.
+  ownerId String
+  owner   User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
   @@index([status])
+  @@index([ownerId])
 }
 
 model Tourist {
@@ -113,4 +120,6 @@ model User {
   role         UserRole @default(leader)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+
+  tours Tour[]
 }

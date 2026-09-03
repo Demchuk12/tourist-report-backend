@@ -1,0 +1,15 @@
+# Caddy obtains and renews a Let's Encrypt certificate for APP_DOMAIN on its
+# own, provided the domain's A record already points at this host and ports
+# 80/443 are open.
+{$APP_DOMAIN} {
+	encode zstd gzip
+
+	# Receipt uploads are capped at MAX_UPLOAD_BYTES (10 MB by default) in the
+	# app; keep the proxy ceiling above it so the API returns its own 413 with a
+	# usable message instead of Caddy cutting the connection first.
+	request_body {
+		max_size 25MB
+	}
+
+	reverse_proxy app:3000
+}

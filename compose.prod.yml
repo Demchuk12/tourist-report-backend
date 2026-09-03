@@ -1,0 +1,78 @@
+# Production stack: API, its database and a TLS-terminating reverse proxy.
+#
+#   docker compose --env-file .env.production -f compose.prod.yml up -d --build
+#
+# docker-compose.yml (the development one) stays as it is: it publishes a bare
+# Postgres on 5432 for `npm run start:dev` and is not used here.
+name: tourist-report
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tourist}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.production}
+      POSTGRES_DB: ${POSTGRES_DB:-tourist_report}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'pg_isready -U ${POSTGRES_USER:-tourist} -d ${POSTGRES_DB:-tourist_report}',
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Deliberately no `ports:` — the database is reachable only over the compose
+    # network, so it is never exposed to the internet.
+
+  app:
+    build:
+      context: .
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-tourist}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-tourist_report}?schema=public
+      PORT: 3000
+      CORS_ORIGIN: ${CORS_ORIGIN:?set CORS_ORIGIN to the PWA origin}
+      JWT_SECRET: ${JWT_SECRET:?generate one with `openssl rand -hex 32`}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      # Matches the volume below; receipts must land on persistent storage.
+      UPLOAD_DIR: /app/uploads
+      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-10485760}
+    volumes:
+      - uploads:/app/uploads
+    healthcheck:
+      test:
+        ['CMD-SHELL', 'wget -qO- http://127.0.0.1:3000/api/health || exit 1']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?set APP_DOMAIN to the API hostname}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Caddy stores the issued certificates here; losing this volume means
+      # re-issuing them and hitting Let's Encrypt rate limits.
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  pgdata:
+  uploads:
+  caddy-data:
+  caddy-config:

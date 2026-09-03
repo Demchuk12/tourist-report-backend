@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, type TourStatus } from '@prisma/client';
+import type { AuthenticatedUser } from '../auth/auth.types.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { CreateTourDto } from './dto/create-tour.dto.js';
 import type { UpdateTourDto } from './dto/update-tour.dto.js';
@@ -24,6 +25,7 @@ export type TourResponse = {
   status: TourStatus;
   touristIds: string[];
   excursionIds: string[];
+  ownerId: string;
   notes: string;
   createdAt: string;
   updatedAt: string;
@@ -33,9 +35,12 @@ export type TourResponse = {
 export class ToursService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(status?: TourStatus): Promise<TourResponse[]> {
+  async findAll(
+    user: AuthenticatedUser,
+    status?: TourStatus,
+  ): Promise<TourResponse[]> {
     const tours = await this.prisma.tour.findMany({
-      where: status ? { status } : undefined,
+      where: { ...visibleTo(user), ...(status ? { status } : {}) },
       include: tourInclude,
       orderBy: { createdAt: 'desc' },
     });
@@ -43,22 +48,22 @@ export class ToursService {
     return tours.map(toTourResponse);
   }
 
-  async findOne(id: string): Promise<TourResponse> {
-    const tour = await this.prisma.tour.findUnique({
-      where: { id },
-      include: tourInclude,
-    });
-    if (!tour) throw new NotFoundException(`Tour ${id} not found`);
-
-    return toTourResponse(tour);
+  async findOne(user: AuthenticatedUser, id: string): Promise<TourResponse> {
+    return toTourResponse(await this.getVisible(user, id));
   }
 
-  async create(dto: CreateTourDto): Promise<TourResponse> {
+  async create(
+    user: AuthenticatedUser,
+    dto: CreateTourDto,
+  ): Promise<TourResponse> {
     const { touristIds, excursionIds, ...fields } = dto;
 
     const tour = await this.prisma.tour.create({
       data: {
         ...fields,
+        // The owner comes from the token, never from the body: a caller cannot
+        // create a tour under someone else's account.
+        ownerId: user.id,
         tourists: connect(touristIds),
         excursions: connect(excursionIds),
       },
@@ -72,7 +77,12 @@ export class ToursService {
    * Relation arrays are `set` rather than merged: the client sends the full
    * membership it wants, so a removed tourist disappears without a second call.
    */
-  async update(id: string, dto: UpdateTourDto): Promise<TourResponse> {
+  async update(
+    user: AuthenticatedUser,
+    id: string,
+    dto: UpdateTourDto,
+  ): Promise<TourResponse> {
+    await this.getVisible(user, id);
     const { touristIds, excursionIds, ...fields } = dto;
 
     const tour = await this.prisma.tour.update({
@@ -88,9 +98,32 @@ export class ToursService {
     return toTourResponse(tour);
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(user: AuthenticatedUser, id: string): Promise<void> {
+    await this.getVisible(user, id);
     await this.prisma.tour.delete({ where: { id } });
   }
+
+  /**
+   * Someone else's tour reads as missing rather than forbidden, so the id space
+   * cannot be probed for which tours exist.
+   */
+  private async getVisible(
+    user: AuthenticatedUser,
+    id: string,
+  ): Promise<TourRow> {
+    const tour = await this.prisma.tour.findFirst({
+      where: { id, ...visibleTo(user) },
+      include: tourInclude,
+    });
+    if (!tour) throw new NotFoundException(`Tour ${id} not found`);
+
+    return tour;
+  }
+}
+
+/** Admins see every tour; a leader is scoped to the ones they own. */
+function visibleTo(user: AuthenticatedUser): Prisma.TourWhereInput {
+  return user.role === 'admin' ? {} : { ownerId: user.id };
 }
 
 type IdRef = { id: string };
@@ -114,6 +147,7 @@ function toTourResponse(tour: TourRow): TourResponse {
     status: tour.status,
     touristIds: tour.tourists.map((tourist) => tourist.id),
     excursionIds: tour.excursions.map((excursion) => excursion.id),
+    ownerId: tour.ownerId,
     notes: tour.notes,
     createdAt: tour.createdAt.toISOString(),
     updatedAt: tour.updatedAt.toISOString(),
