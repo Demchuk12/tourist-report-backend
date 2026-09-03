@@ -19,6 +19,9 @@ npm run start:dev
 - Swagger UI: `http://localhost:3000/api/docs`
 - Health: `GET /api/health` (also reports whether the database answers)
 
+> `npm run db:up` needs Docker. On a machine that already runs PostgreSQL, point
+> `DATABASE_URL` at it instead and skip that step.
+
 An initial migration (`prisma/migrations/20260903000000_init`) is committed, so a fresh
 database only needs `prisma:deploy`. Use `npm run prisma:migrate` when you change
 `prisma/schema.prisma` and want a new migration generated.
@@ -32,11 +35,53 @@ database only needs `prisma:deploy`. Use `npm run prisma:migrate` when you chang
 | `CORS_ORIGIN`      | `http://localhost:5173`        | Comma-separated allowed origins (SvelteKit dev)     |
 | `UPLOAD_DIR`       | `uploads`                      | Where receipt bytes are written                     |
 | `MAX_UPLOAD_BYTES` | `10485760`                     | Per-file limit for receipts                         |
+| `JWT_SECRET`       | —                              | Access token signing key (required)                 |
+| `JWT_EXPIRES_IN`   | `7d`                           | Access token lifetime                               |
+
+## Authentication
+
+Every endpoint requires a bearer token except `GET /api/health` and the two login
+routes. `JwtAuthGuard` is registered globally through `APP_GUARD`, so a new controller
+is protected the moment it is added and has to opt out explicitly with `@Public()` —
+a forgotten decorator fails closed rather than open.
+
+```bash
+TOKEN=$(curl -s -X POST http://localhost:3000/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"admin@tourist-report.local","password":"admin12345"}' | jq -r .accessToken)
+
+curl http://localhost:3000/api/tours -H "Authorization: Bearer $TOKEN"
+```
+
+In the Swagger UI, press **Authorize** and paste the token.
+
+### Development accounts
+
+`npm run prisma:seed` upserts these by email, so re-running it resets their passwords
+rather than failing. They are development credentials — do not ship them.
+
+| Email                        | Password      | Role     |
+| ---------------------------- | ------------- | -------- |
+| `admin@tourist-report.local` | `admin12345`  | `admin`  |
+| `leader@tourist-report.local`| `leader12345` | `leader` |
+
+The `role` column is stored and travels in the token claims, but no endpoint restricts
+by it yet — both accounts currently have identical access.
+
+### Password storage
+
+Hashes use node's built-in `scrypt` (`node:crypto`) rather than bcrypt, so password
+storage adds no native dependency to rebuild on each Node upgrade. The stored form is
+`scrypt:<salt>:<key>`, comparison is `timingSafeEqual`, and a wrong password and an
+unknown email return the same `401` so the endpoint cannot enumerate accounts.
 
 ## Endpoints
 
 | Method   | Path                                       | Notes                                             |
 | -------- | ------------------------------------------ | ------------------------------------------------- |
+| `POST`   | `/api/auth/register`                       | Public; returns a token                            |
+| `POST`   | `/api/auth/login`                          | Public; returns a token                            |
+| `GET`    | `/api/auth/me`                             | The account behind the current token               |
 | `GET`    | `/api/tours?status=`                       | List, newest first                                 |
 | `GET`    | `/api/tours/:id`                           |                                                    |
 | `POST`   | `/api/tours`                               |                                                    |
@@ -90,5 +135,6 @@ npm run typecheck     # tsc --noEmit
 npm run lint          # oxlint
 npm test              # unit tests (vitest)
 npm run test:e2e      # HTTP tests with the database stubbed out
+npm run prisma:seed   # (re)create the development accounts
 npm run prisma:studio # browse the data
 ```

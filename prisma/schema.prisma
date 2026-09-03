@@ -96,3 +96,21 @@ model Attachment {
 
   @@index([excursionId])
 }
+
+enum UserRole {
+  admin
+  leader
+}
+
+/// An account that may call the API. Only the scrypt hash is stored — the raw
+/// password never reaches the database, and `passwordHash` is stripped from
+/// every response by the auth mapper rather than by a Prisma `omit`.
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  fullName     String   @default("")
+  role         UserRole @default(leader)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}

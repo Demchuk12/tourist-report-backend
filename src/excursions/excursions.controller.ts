@@ -13,7 +13,7 @@ import {
   Query,
 } from '@nestjs/common';
 import { ExcursionStatus } from '@prisma/client';
-import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { CreateExcursionDto } from './dto/create-excursion.dto.js';
 import { UpdateExcursionDto } from './dto/update-excursion.dto.js';
 import {
@@ -23,6 +23,7 @@ import {
 } from './excursions.service.js';
 
 @ApiTags('excursions')
+@ApiBearerAuth()
 @Controller('excursions')
 export class ExcursionsController {
   constructor(private readonly excursions: ExcursionsService) {}

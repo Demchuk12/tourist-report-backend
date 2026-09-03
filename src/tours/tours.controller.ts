@@ -12,12 +12,13 @@ import {
   Query,
 } from '@nestjs/common';
 import { TourStatus } from '@prisma/client';
-import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { CreateTourDto } from './dto/create-tour.dto.js';
 import { UpdateTourDto } from './dto/update-tour.dto.js';
 import { ToursService, type TourResponse } from './tours.service.js';
 
 @ApiTags('tours')
+@ApiBearerAuth()
 @Controller('tours')
 export class ToursController {
   constructor(private readonly tours: ToursService) {}

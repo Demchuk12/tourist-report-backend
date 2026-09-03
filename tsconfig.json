@@ -5,6 +5,10 @@
     "resolvePackageJsonExports": true,
     "esModuleInterop": true,
     "isolatedModules": true,
+    // prisma/seed.ts is run directly by Node 24, which resolves the literal .ts
+    // specifier it imports; the rewrite keeps that legal without breaking emit.
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
     "declaration": true,
     "removeComments": true,
     "emitDecoratorMetadata": true,

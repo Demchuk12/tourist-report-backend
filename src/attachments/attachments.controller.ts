@@ -14,7 +14,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { AttachmentsService } from './attachments.service.js';
 import type { AttachmentResponse } from './attachment.mapper.js';
@@ -27,6 +27,7 @@ import type { AttachmentResponse } from './attachment.mapper.js';
 const MULTER_HARD_LIMIT_BYTES = 25 * 1024 * 1024;
 
 @ApiTags('attachments')
+@ApiBearerAuth()
 @Controller()
 export class AttachmentsController {
   constructor(private readonly attachments: AttachmentsService) {}

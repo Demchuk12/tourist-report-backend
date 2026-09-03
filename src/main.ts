@@ -36,6 +36,8 @@ async function bootstrap(): Promise<void> {
       .setTitle('Tourist Report API')
       .setDescription('Tours, tourists, excursions and receipt attachments.')
       .setVersion('1.0')
+      // Lets the Swagger UI "Authorize" button hold a token from /api/auth/login.
+      .addBearerAuth()
       .build(),
   );
   SwaggerModule.setup('api/docs', app, document);

@@ -11,12 +11,13 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { CreateTouristDto } from './dto/create-tourist.dto.js';
 import { UpdateTouristDto } from './dto/update-tourist.dto.js';
 import { TouristsService, type TouristResponse } from './tourists.service.js';
 
 @ApiTags('tourists')
+@ApiBearerAuth()
 @Controller('tourists')
 export class TouristsController {
   constructor(private readonly tourists: TouristsService) {}
