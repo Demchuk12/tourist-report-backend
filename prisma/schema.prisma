@@ -1,0 +1,98 @@
+// Prisma schema for tourist-report-backend.
+//
+// Date-like fields (startDate, endDate, date, time) are stored as plain strings
+// in exactly the shape the PWA uses ("YYYY-MM-DD" / "HH:mm"), so the client can
+// keep treating them as opaque calendar values without timezone conversion.
+// Only the audit timestamps are real DateTime columns.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum TourStatus {
+  planned
+  active
+  completed
+}
+
+enum ExcursionStatus {
+  pending
+  completed
+  cancelled
+}
+
+model Tour {
+  id          String     @id @default(uuid())
+  name        String
+  destination String     @default("")
+  startDate   String     @default("")
+  endDate     String     @default("")
+  status      TourStatus @default(planned)
+  notes       String     @default("")
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  tourists   Tourist[]   @relation("TourTourists")
+  excursions Excursion[] @relation("TourExcursions")
+
+  @@index([status])
+}
+
+model Tourist {
+  id             String   @id @default(uuid())
+  fullName       String
+  phone          String   @default("")
+  email          String   @default("")
+  documentNumber String   @default("")
+  notes          String   @default("")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  tours Tour[] @relation("TourTourists")
+  /// Payments are stored as "who has paid" — absence from the list means unpaid,
+  /// so nothing needs pre-populating when tour membership changes.
+  paidExcursions Excursion[] @relation("ExcursionPayments")
+}
+
+model Excursion {
+  id       String          @id @default(uuid())
+  title    String
+  location String          @default("")
+  date     String          @default("")
+  time     String          @default("")
+  guide    String          @default("")
+  notes    String          @default("")
+  /// Set by hand by the group leader — never derived from the date.
+  status   ExcursionStatus @default(pending)
+  /// Price per participant.
+  price    Decimal         @default(0) @db.Decimal(12, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tours       Tour[]       @relation("TourExcursions")
+  paidBy      Tourist[]    @relation("ExcursionPayments")
+  receipts    Attachment[]
+
+  @@index([status])
+  @@index([date])
+}
+
+/// Receipt photo. Only metadata lives in the database; the bytes are written to
+/// UPLOAD_DIR under the attachment id.
+model Attachment {
+  id        String   @id @default(uuid())
+  name      String
+  mimeType  String
+  size      Int
+  createdAt DateTime @default(now())
+
+  excursionId String
+  excursion   Excursion @relation(fields: [excursionId], references: [id], onDelete: Cascade)
+
+  @@index([excursionId])
+}
